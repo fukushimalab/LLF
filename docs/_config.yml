@@ -1,0 +1,8 @@
+theme: jekyll-theme-cayman
+# remote_theme: brianmaierjr/long-haul
+
+plugins:
+  - jekyll-feed
+  - jekyll-remote-theme
+  - github-pages
+  - jekyll-sitemap
