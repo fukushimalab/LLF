@@ -1,12 +1,14 @@
 # Local Look-Up Table Upsampling for Accelerating Image Processing
 
-This paper provide the code, binary, subjective assessment results and distortion dataset of local LUT upsampling of the following paper.
+This page provides the code, binary, subjective assessment results, and distortion dataset of local LUT upsampling of the following paper.
 
 # Paper
 Teppei Tsubokawa, Hiroshi Tajima, Yoshihiro Maeda, and Norishige Fukushima
-"Local Look-Up Table Upsampling for Accelerating Image Processing", Multimedia Tools and Applications, 2023.
-[[Springer]](https://link.springer.com/article/10.1007/s11042-023-16405-7)
+"Local Look-Up Table Upsampling for Accelerating Image Processing," Multimedia Tools and Applications, 2023.
 
+[[Springer site]](https://link.springer.com/article/10.1007/s11042-023-16405-7), This paper is open access.
+
+## bibtex
 ```
 @article{tsubokawa2023local,
     author  = {Tsubokawa, Teppei and Tajima, Hiroshi and Yoshihiro Maeda and Norishige Fukushima},
@@ -20,14 +22,14 @@ Teppei Tsubokawa, Hiroshi Tajima, Yoshihiro Maeda, and Norishige Fukushima
 ![LLU](./fig1.webp "Fig1")
 
 
-# Abstract
+## Abstract
 The resolution of cameras is increasing, and speedup of various image processing is required to accompany this increase. A simple way of acceleration is processing the image at low resolution and then upsampling the result. Moreover, when we can use an additional high-resolution image as guidance formation for upsampling, we can upsample the image processing results more accurately. We propose an approach to accelerate various image processing by downsampling and joint upsampling. This paper utilizes per-pixel look-up tables (LUTs), named local LUT, which are given a low-resolution input image and output pair. Subsequently, we upsample the local LUT. We can then generate a high-resolution image only by referring to its local LUT. In our experimental results, we evaluated the proposed method on several image processing filters and applications: iterative bilateral filtering, ℓ0
- smoothing, local Laplacian filtering, inpainting, and haze removing. The proposed method accelerates image processing with sufficient approximation accuracy, and the proposed outperforms the conventional approaches in the trade-off between accuracy and efficiency. Our code is available at https://fukushimalab.github.io/LLF/
+ smoothing, local Laplacian filtering, inpainting, and haze removing. The proposed method accelerates image processing with sufficient approximation accuracy, and the proposed outperforms the conventional approaches in the trade-off between accuracy and efficiency. Our code is available at https://fukushimalab.github.io/LLF/.
  
 # Code
-The code will be updated and integrated to OpenCP, which uses [OpenCV](https://opencv.org/).
+The code will be updated and integrated into OpenCP, which uses [OpenCV](https://opencv.org/).
 
-* OpenCP repository will contain the optimized code (AVX vectorization and OpenMP parallelization), which is used in our experiments.
+* The OpenCP repository will contain the optimized code (AVX vectorization and OpenMP parallelization) used in our experiments.
     * [OpenCP](https://github.com/norishigefukushima/OpenCP)
     * [localLUTUpsample header](https://github.com/norishigefukushima/OpenCP/blob/master/include/localLUTUpsample.hpp)
 
@@ -36,41 +38,41 @@ The code will be updated and integrated to OpenCP, which uses [OpenCV](https://o
 ```cpp
 void testSimple()
 {
-	cp::LocalLUTUpsample llu;
-	//images
-	cv::Mat srchigh, dstlow, srclow, dsthigh;
-	srchigh = cv::imread("source.png");//high resoluton source image
-	dstlow = cv::imread("processed.png");//low resolution processed image
-	//parameters
-	int r = 2;//kernel radius for building LUT from correspondence of low resolution source and processed image
-	int lut_num = 256;// the size of LUT per pixel 
-	int R = 2;// filtering radius for a LUT (LUT smoothing)
-	cp::LocalLUTUpsample::BUILD_LUT buildLUT = cp::LocalLUTUpsample::BUILD_LUT::L2_MIN;//building LUT method
-	cp::LocalLUTUpsample::UPTENSOR upsampleLUT = cp::LocalLUTUpsample::UPTENSOR::GAUSS64;//tensor upsampling method
-	cp::LocalLUTUpsample::BOUNDARY boundaryLUT = cp::LocalLUTUpsample::BOUNDARY::LINEAR;//boundary condition of LUT
-	bool useOffset = true;//with/without offset map
-	//run
-	cv::resize(srchigh, srclow, dstlow.size());//down sample high resolution source image
-	llu.upsample(srclow, dstlow, srchigh, dsthigh, r, lut_num, R, buildLUT, upsampleLUT, boundaryLUT, useOffset);//body
-	//show
-	cv::imshow("out", dsthigh);
-	cv::waitKey();
+        cp::LocalLUTUpsample llu;
+        //images
+        cv::Mat srchigh, dstlow, srclow, dsthigh;
+        srchigh = cv::imread("source.png");//high resolution source image
+        dstlow = cv::imread("processed.png");//low resolution processed image
+        //parameters
+        int r = 2;//kernel radius for building LUT from correspondence of low resolution source and processed image
+        int lut_num = 256;// the size of LUT per pixel 
+        int R = 2;// filtering radius for a LUT (LUT smoothing)
+        cp::LocalLUTUpsample::BUILD_LUT buildLUT = cp::LocalLUTUpsample::BUILD_LUT::L2_MIN;//building LUT method
+        cp::LocalLUTUpsample::UPTENSOR upsampleLUT = cp::LocalLUTUpsample::UPTENSOR::GAUSS64;//tensor upsampling method
+        cp::LocalLUTUpsample::BOUNDARY boundaryLUT = cp::LocalLUTUpsample::BOUNDARY::LINEAR;//boundary condition of LUT
+        bool useOffset = true;//with/without offset map
+        //run
+        cv::resize(srchigh, srclow, dstlow.size());//down sample high resolution source image
+        llu.upsample(srclow, dstlow, srchigh, dsthigh, r, lut_num, R, buildLUT, upsampleLUT, boundaryLUT, useOffset);//body
+        //show
+        cv::imshow("out", dsthigh);
+        cv::waitKey();
 }
 ```
 
 # Binary
 The pre-compiled binary can be downloaded.
-The zip files contains OpenCV and OpenCP DLLs.
+The zip file contains OpenCV and OpenCP DLLs.
 * [download LLU binary (under construction)](LLU.zip)
 
-The binary is build by VisualStudio2022 with OpenCV4.8 and OpenCP on Windows.
+The binary is built by VisualStudio2022 with OpenCV4.8 and OpenCP on Windows.
 If the redistribution package for VisualStudio2022 is installed on your PC, please install vc_redist.x64.exe file from the direct link.
 
 * [VisualStudio2022 redistribution package for x64](https://aka.ms/vs/17/release/vc_redist.x64.exe)
 
 ## Requirement
-* AVX2 supported computer, e.g, Intel (4th generation Core-i or later) or AMD (Zen or later).
-    * for Intel's low TDP CPU, such as ATOM, only support Alderlake-N or later.
+* AVX2-supported computer, e.g., Intel (4th generation Core-i or later) or AMD (Zen or later).
+    * Intel's low TDP CPU, such as ATOM, only supports Alderlake-N or later.
 
 ## Usage
 ### Simplest option
@@ -92,8 +94,8 @@ LLU source.png processed.png out.png -r=2 -n=256 -R=2 -L=0 -U=6 -B=3 -o -d
 * -L=0: building LUT method is L2 distance minimization
 * -U=6: LUT tensor upsampling method is Gauss64 (8x8 kernel).
 * -B=3: boundary condition of LUT is linear method
-* -o: use offset map, no meaning in 256 LUT case. 
-* -d: use GUI debug for local LUT (call `guiLUT` method).
+* -o: using offset map, no meaning in 256 LUT case. 
+* -d: using GUI debug for local LUT (call `guiLUT` method).
 
 ### Help
 The following options show help message: `-h`, `-?`, `--help `.
@@ -134,13 +136,26 @@ LLU source.png processed.png out.png -r=2 -n=256 -R=2 -L=0 -U=6 -B=3 -o -d
 
 # Subjective Assessment Results / Distortion Image Dataset
 Subjective assessment results for each upsampling method can be downloaded.
-We upload distorted images and its scores for the assessment.
+We upload distorted images and their scores for the assessment.
 
 * [download link (544.1 MB)](https://drive.google.com/file/d/1p0BxJkWahT5jvVl9BWvjdvoWAMW10kse/view?usp=sharing)
-The files is uploaded at Google drive, not included in Github repository.
+
+The file is uploaded to Google Drive and is not included in the GitHub repository.
 If you run the code for the subjective assessment, please unzip the file to img directory.
 
-The zip file contains 429 images
+The following code is an example of how to read images and JND files in C++.
+* [code](https://github.com/fukushimalab/LLF/blob/main/LLU/testReadSubjective.cpp)
+
+The zip file contains 429 images and JND.csv
+Directly
+```
+MTA_subjective_assessment
+ +processed_source   ( 20 images): processed images (5 images x 4 processing types)
+ +processed_upsample (400 images): upsampled processed images (5 images x 4 processing types x 5 upsampling types x 4 levels)
+ +original:          (  9 images): original images
+ +JND.csv                        : JND results
+```
+## Images
 * 5 images
   * per processing type
 * 4 Processing type
@@ -149,17 +164,12 @@ The zip file contains 429 images
   * cubic, JBU, GIU, BGU, LLU
 * 4 upsampling levels
   * x4, x16, x64, x256
-```
-MTA_subjective_assessment
- +processed_source   ( 20 images): processed images (5 images x 4 processing types)
- +processed_upsample (400 images): upsampled processed images (5 images x 4 processing types x 5 upsampling types x 4 levels)
- +original:          (  9 images): original images
- +JND.csv                        : JND results
-```
-The assessment results of "jnd.csv" contains the following information.
+
+## CSV
+The assessment result of "jnd.csv" contains the following information.
 
 * index
-    * indeces for each score (0-419)
+    * indices for each score (0-419)
 * distortion
     * 0: bf, 1:l0, 2: ll, 3: hz
 * image
@@ -171,11 +181,11 @@ The assessment results of "jnd.csv" contains the following information.
 * ID1-11, ave
     * JND results: 0: not same, 1: same
 
-Example of dataset.
+## Example of Dataset
 ![sidebyside](./sidebyside.webp "sidebyside")
 
 # Link
- This paper uses two external dataset and the followings show the download links.
+ This paper uses two external datasets, and the following shows the download links.
 * [HRHP: high-resolution high-precision images dataset](http://imagecompression.info/test_images/)
 * [T-Recipes: Transform Recipes dataset](https://groups.csail.mit.edu/graphics/xform_recipes/dataset.html) [^1]
 
