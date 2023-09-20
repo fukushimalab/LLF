@@ -9,6 +9,7 @@
 void testGUI();
 void mtaExperiment();
 int command(int argc, const char* const argv[]);
+void read_subjective_assessment(bool isIndivisual = false, int waitTime = 1, bool isResizeShow = true, bool isWriteWebP = false);
 
 void testSimple()
 {
@@ -36,8 +37,9 @@ void testSimple()
 
 int main(int argc, char** argv)
 {
-	return command(argc, argv);//command line tool
-	testSimple();
+	//testSimple();//simple test
+	//return command(argc, argv);//command line tool
 	testGUI(); return 0; //interactive test
+	//read_subjective_assessment(); return 0;
 	//mtaExperiment(); //test of MTA paper
 }

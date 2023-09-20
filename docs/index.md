@@ -136,25 +136,27 @@ LLU source.png processed.png out.png -r=2 -n=256 -R=2 -L=0 -U=6 -B=3 -o -d
 Subjective assessment results for each upsampling method can be downloaded.
 We upload distorted images and its scores for the assessment.
 
-(under construction)
-* [Images (1024x1024 side-by-side)](https://github.com/fukushimalab/LLF/tree/main/subjective/)
-* [Assessment Results](./subjective/jnd.xlsx)
+* [download link (544.1 MB)](https://drive.google.com/file/d/1p0BxJkWahT5jvVl9BWvjdvoWAMW10kse/view?usp=sharing)
+The files is uploaded at Google drive, not included in Github repository.
+If you run the code for the subjective assessment, please unzip the file to img directory.
 
-The "images" directory contains 20 zip files (1.14 GB in total).
+The zip file contains 429 images
+* 5 images
+  * per processing type
+* 4 Processing type
+  * bf (bilateral filtering), l0 (L0 smoothing), ll (local Laplacian filtering), hz (haze removing) by upsampling 
+* 5 upsampling types
+  * cubic, JBU, GIU, BGU, LLU
+* 4 upsampling levels
+  * x4, x16, x64, x256
 ```
-bf_img00.zip
-l0_img00.zip
-ll_img00.zip
-hz_img00.zip
-bf_img01.zip
-...
-hz_img04.zip
+MTA_subjective_assessment
+ +processed_source   ( 20 images): processed images (5 images x 4 processing types)
+ +processed_upsample (400 images): upsampled processed images (5 images x 4 processing types x 5 upsampling types x 4 levels)
+ +original:          (  9 images): original images
+ +JND.csv                        : JND results
 ```
-The files 5 source images(00-04) with 21 distortions with 4 filtering types: bf (bilateral filtering), l0 (L0 smoothing), ll (local Laplacian filtering), hz (haze removing).
-Each image contains 2048x1024 image, which are connected no distorted image and distorted image side-by-side.
-
-
-The assessment results of "jnd.xlsx" contains the following information.
+The assessment results of "jnd.csv" contains the following information.
 
 * index
     * indeces for each score (0-419)
@@ -169,7 +171,7 @@ The assessment results of "jnd.xlsx" contains the following information.
 * ID1-11, ave
     * JND results: 0: not same, 1: same
 
-Example: local Laplacian filtering accelerated by cubic upsampling (1/64).
+Example of dataset.
 ![sidebyside](./sidebyside.webp "sidebyside")
 
 # Link

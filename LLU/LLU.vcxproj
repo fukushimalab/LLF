@@ -134,6 +134,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="testGUI.cpp" />
     <ClCompile Include="testMTA.cpp" />
+    <ClCompile Include="testReadSubjective.cpp" />
     <ClCompile Include="tools.cpp" />
   </ItemGroup>
   <ItemGroup>
