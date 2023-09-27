@@ -38,8 +38,8 @@ void testSimple()
 int main(int argc, char** argv)
 {
 	//testSimple();//simple test
-	//return command(argc, argv);//command line tool
-	testGUI(); return 0; //interactive test
+	return command(argc, argv);//command line tool
+	//testGUI(); return 0; //interactive test
 	//read_subjective_assessment(); return 0;
 	//mtaExperiment(); //test of MTA paper
 }
