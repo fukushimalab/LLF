@@ -27,13 +27,14 @@ The resolution of cameras is increasing, and speedup of various image processing
  smoothing, local Laplacian filtering, inpainting, and haze removing. The proposed method accelerates image processing with sufficient approximation accuracy, and the proposed outperforms the conventional approaches in the trade-off between accuracy and efficiency. Our code is available at https://fukushimalab.github.io/LLF/.
  
 # Code
-The code will be updated and integrated into OpenCP, which uses [OpenCV](https://opencv.org/).
+The code of local LUT upsampling is integrated into OpenCP, which uses [OpenCV](https://opencv.org/).
 
-* The OpenCP repository will contain the optimized code (AVX vectorization and OpenMP parallelization) used in our experiments.
+* The OpenCP repository contains the optimized code (AVX vectorization and OpenMP parallelization) used in our experiments.
     * [OpenCP](https://github.com/norishigefukushima/OpenCP)
     * [localLUTUpsample header](https://github.com/norishigefukushima/OpenCP/blob/master/include/localLUTUpsample.hpp)
 
 ## Usage
+The simple code for using the class of local LUT upsampling is as follows.
 
 ```cpp
 void testSimple()

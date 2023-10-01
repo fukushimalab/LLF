@@ -10,7 +10,6 @@ using namespace cv;
 using namespace cp;
 
 //enable upsampling
-
 #define CU
 //#define NEDI
 #define JBU
@@ -20,33 +19,64 @@ using namespace cp;
 //#define ILGU64
 //#define LLU_ALL
 
-//const bool gtomit = true;//true: skip GT computing (for processingType = 0 or1)
-const bool gtomit = false;//false: compute GT image (for processingType = 0 or1)
-//constexpr int processingType = 0;//HRHPRecompute
-//constexpr int processingType = 1;//TRecipesRecompute
-constexpr int processingType = 2;//TRecipesMTARecompute
-//constexpr int processingType = 3;//MTASubjective
-//constexpr int processingType = 4;//TRecipesDirect
-/*
-constexpr int emethod = 0;//Iterative Bilateral Filter
-//constexpr int emethod = 1;//Local Laplacian Filter
-//constexpr int emethod = 2;//Haze Remove
-//constexpr int emethod = 3;//Inpaint
-//constexpr int emethod = 4;//L0smooth
-//constexpr int emethod = 5;//Stylization
-*/
+//const bool gtomit = true;//true: skip GT computing (for processingType=0 or1)
+const bool gtomit = false;//false: compute GT image (for processingType=0 or1)
+//constexpr int processingType = 0;//HRHPRecompute (download: http://imagecompression.info/test_images/)
+//constexpr int processingType = 1;//TRecipesRecompute (download: https://groups.csail.mit.edu/graphics/xform_recipes/dataset.html)
+constexpr int processingType = 2;//MTASubjective (download: https://fukushimalab.github.io/LLF/)
+//constexpr int processingType = 3;//TRecipesMTARecompute (download T-Recipes and call generateDataFromTransformRecipes function )
+//constexpr int processingType = 4;//TRecipesDirect (download T-Recipes and call sortTransformRecipes)
+
+#pragma region parameters
+// IBF parameters
+const int iterationBF = 3;
+const double sigma_c = 15.0;
+const double sigma_s = 10.0;
+const int r_BF = cvRound(3 * sigma_s);
+// L0 parameters
+const float l0lambda = 0.005f;
+const float l0kapper = 1.5f;
+
+// LocalLaplacian parameters
+// Exponent for the detail remapping function.
+//(< 1 for detail enhancement, > 1 for detail suppression)
+const double alpha_llf = 0.5;
+// Slope for edge remapping function 
+//(< 1 for tone mapping, > 1 for inverse tone mapping)
+const double beta_llf = 0.5;
+// Edge threshold (in image range space)
+const double sigma_r_llf = 0.9;
+
+// haze remove parameters
+const int hz_r_dark = 4;
+const double hz_rate = 0.1;
+const int hz_r_joint = 15;
+const double hz_e_joint = 0.6;
+#pragma endregion
+
+enum
+{
+	ITERLATIVE_BF,
+	L0_SMOOTH,
+	LOCAL_LAPLACIAN_FILTER,
+	HAZE_REMOVE,
+	COLOR_CONTRAST,
+	INPAINT,
+	STYLIZATION
+};
 string getProcessingDataTestName(const int emethod)
 {
 	string ret = "";
 	switch (emethod)
 	{
-	default:
-	case 0: ret = "Iterative Bilateral Filter"; break;
-	case 1: ret = "L0smooth"; break;
-	case 2: ret = "Local Laplacian Filter"; break;
-	case 3: ret = "Haze Remove"; break;
-	case 4: ret = "Inpaint"; break;
-	case 5: ret = "Stylization"; break;
+	case ITERLATIVE_BF: ret = "Iterative Bilateral Filter"; break;
+	case L0_SMOOTH: ret = "L0smooth"; break;
+	case LOCAL_LAPLACIAN_FILTER: ret = "Local Laplacian Filter"; break;
+	case HAZE_REMOVE: ret = "Haze Remove"; break;
+	case COLOR_CONTRAST: ret = "Color contrast"; break;
+	case INPAINT: ret = "Inpaint"; break;
+	case STYLIZATION: ret = "Stylization"; break;
+	default: ret = "undefined"; break;
 	}
 	return ret;
 
@@ -88,58 +118,137 @@ string getProcessingTRecipesName(const int distIdx)
 	return ret;
 }
 
-// IBF parameters
-const int iterationBF = 3;
-const double sigma_c = 15.0;
-const double sigma_s = 10.0;
-const int r_BF = cvRound(3 * sigma_s);
-#define BF_PARAMETERS "I3c20s10"
-// L0 parameters
-const float l0lambda = 0.005f;
-const float l0kapper = 1.5f;
-//#define L0_PARAMETERS "l001k15"
-#define L0_PARAMETERS "l0005k15"
+void processingData(Mat& src, Mat& dst, const int upsample_size, const int dist2Idx, string img_name)
+{
+	//image processing in downsampled domain
+	const double sub_rate = 1.0 / upsample_size;
+#pragma region ip_in_ds
+	if (dist2Idx == ITERLATIVE_BF)
+	{
+		const int r = (int)ceil(3.0 * sigma_s * sub_rate);
+		iterative_BF(src, dst, r, sigma_c, sigma_s * sub_rate, iterationBF, false);
+		if (img_name != "")imwrite("img/answer/bf/" + img_name + ".png", dst);
+	}
+	else if (dist2Idx == L0_SMOOTH)
+	{
+		cp::L0Smoothing(src, dst, l0lambda, l0kapper);
+		if (img_name != "")imwrite("img/answer/l0/" + img_name + ".png", dst);
+	}
+	else if (dist2Idx == LOCAL_LAPLACIAN_FILTER)
+	{
+		LocalLaplacianFilter(src, dst, alpha_llf, beta_llf, sigma_r_llf);
+		if (img_name != "")imwrite("img/answer/ll/" + img_name + ".png", dst);
+	}
+	else if (dist2Idx == HAZE_REMOVE)
+	{
+		cp::HazeRemove hr;
+		const int r = int(hz_r_joint * sub_rate);
+		const int dr = int(hz_r_dark * sub_rate);
+		hr(src, dst, dr, hz_rate, r, hz_e_joint);
+		//hr.removeFastGlobalSmootherFilter(srclow, low, 1, 0.1, 20000, 215, 0.25, 3);
+		if (img_name != "")imwrite("img/answer/hr/" + img_name + ".png", dst);
+	}
+	else if (dist2Idx == COLOR_CONTRAST)
+	{
+		cvtColor(src, dst, COLOR_BGR2YUV);
+		vector<Mat> sp;
+		split(dst, sp);
+		cp::contrastGamma(sp[0], sp[0], 2.0);
+		merge(sp, dst);
+		cvtColor(dst, dst, COLOR_YUV2BGR);
+		if (img_name != "")imwrite("img/answer/cc/" + img_name + ".png", dst);
+	}
+	else if (dist2Idx == INPAINT)
+	{
+		Mat mask_ = imread("img/kodim01_mask.png", 0);
+		//Mat mask_ = imread("img/kodim02_mask.png", 0);
+		Mat mask;
+		resize(mask_, mask, src.size(), 0, 0, INTER_NEAREST);
+		xphoto::inpaint(src, mask, dst, 0);
+		if (img_name != "")imwrite("img/answer/ip/" + img_name + ".png", dst);
+	}
+	else if (dist2Idx == STYLIZATION)
+	{
+		stylization(src, dst);
+		if (img_name != "")imwrite("img/answer/st/" + img_name + ".png", dst);
+	}
+	else
+	{
+		cout << "undefined at processingData" << endl;
+	}
+#pragma endregion
+}
 
-// LocalLaplacian parameters
-// Exponent for the detail remapping function.
-//(< 1 for detail enhancement, > 1 for detail suppression)
-const double alpha_llf = 0.5;
-// Slope for edge remapping function 
-//(< 1 for tone mapping, > 1 for inverse tone mapping)
-const double beta_llf = 0.5;
-// Edge threshold (in image range space)
-const double sigma_r_llf = 0.9;
-#define LL_PARAMETERS "a05b05r03"
-
-// haze remove parameters
-const int hz_r_dark = 4;
-const double hz_rate = 0.1;
-const int hz_r_joint = 15;
-const double hz_e_joint = 0.6;
-#define HR_PARAMETERS "dark4rate01rj15ej06"
+Mat loadData(const int dist2Idx, string img_name)
+{
+	Mat answer;
+	if (dist2Idx == ITERLATIVE_BF)
+	{
+		answer = imread("img/answer/bf/" + img_name + ".png");
+	}
+	else if (dist2Idx == L0_SMOOTH)
+	{
+		answer = imread("img/answer/l0/" + img_name + ".png");
+	}
+	else if (dist2Idx == LOCAL_LAPLACIAN_FILTER)
+	{
+		answer = imread("img/answer/ll/" + img_name + ".png");
+	}
+	else if (dist2Idx == HAZE_REMOVE)
+	{
+		answer = imread("img/answer/hz/" + img_name + ".png");
+	}
+	else if (dist2Idx == COLOR_CONTRAST)
+	{
+		answer = imread("img/answer/cc/" + img_name + ".png");
+	}
+	else if (dist2Idx == INPAINT)
+	{
+		answer = imread("img/answer/ip/" + img_name + ".png");
+	}
+	else if (dist2Idx == STYLIZATION)
+	{
+		answer = imread("img/answer/st/" + img_name + ".png");
+	}
+	else
+	{
+		cout << "undefined at loadData" << endl;
+	}
+	return answer;
+}
 
 //int processingType = 0;//HRHPRecompute
 void loadHRHPAndProcessingDataHigh(Mat& src, Mat& answer, const int dist2Idx, const int imageIdx, const int color, Size size = Size(1024, 1024))
 {
 #pragma region readImage
-	const int iidx = imageIdx % 7;
+	const int iidx = imageIdx % 16;
+	string dir = "img/HRHP/";
 	string img_name = "";
 
 	switch (iidx)
 	{
 	default:
 	case 0: img_name = "artificial"; break;
-	case 1: img_name = "building"; break;
-	case 2: img_name = "cathedral"; break;
-	case 3:	img_name = "deer"; break;
-	case 4: img_name = "bridge"; break;
-	case 5: img_name = "flower"; break;
+	case 1: img_name = "big_building"; break;
+	case 2: img_name = "big_tree"; break;
+	case 3: img_name = "bridge"; break;
+	case 4: img_name = "cathedral"; break;
+	case 5:	img_name = "deer"; break;
 	case 6: img_name = "fireworks"; break;
+	case 7: img_name = "flower_foveon"; break;
+	case 8: img_name = "hdr"; break;
+	case 9: img_name = "leaves_iso_200"; break;
+	case 10: img_name = "leaves_iso_200"; break;
+	case 11: img_name = "leaves_iso_1600"; break;
+	case 12: img_name = "nightshot_iso_100"; break;
+	case 13: img_name = "nightshot_iso_1600"; break;
+	case 14: img_name = "spider_web"; break;
+	case 15: img_name = "zone_plate"; break;
 	}
 
-	string fname = "img/leaf.png";//overwrite
-	src = cropMultipleFloor(imread(fname, color), 128);
-	if (src.empty())cout << "file open error" << fname << endl;
+	//string fname = "img/leaf.png";//overwrite
+	src = cropMultipleFloor(imread(dir + img_name + ".png", color), 128);
+	if (src.empty())cout << "file open error" << dir + img_name << endl;
 
 	if (color == 0)
 	{
@@ -150,75 +259,15 @@ void loadHRHPAndProcessingDataHigh(Mat& src, Mat& answer, const int dist2Idx, co
 #pragma endregion
 
 	answer.create(src.rows, src.cols, src.type());
-	double processing_fulltime = 0.0;
-	double processing_subtime = 0.0;
 	if (gtomit == true) //accelerate image processing for large size image
 	{
-		if (dist2Idx == 0)
-		{
-			answer = imread("img/answer/bf/" + img_name + "_" + BF_PARAMETERS + ".png");
-		}
-		else if (dist2Idx == 1)
-		{
-			answer = imread("img/answer/l0/" + img_name + "_" + L0_PARAMETERS + ".png");
-		}
-		else if (dist2Idx == 2)
-		{
-			answer = imread("img/answer/ll/" + img_name + "_" + LL_PARAMETERS + ".png");
-		}
-		else if (dist2Idx == 3)
-		{
-			answer = imread("img/answer/hr/" + img_name + "_" + HR_PARAMETERS + ".png");
-		}
-		else if (dist2Idx == 4)
-		{
-			answer = imread("img/answer/ip/" + img_name + ".png");
-		}
-		else if (dist2Idx == 5)
-		{
-			answer = imread("img/answer/st/" + img_name + ".png");
-		}
+		answer = loadData(dist2Idx, img_name);
 	}
 	else //compute
 	{
 		cp::Timer t("compute GT", cp::TIME_MSEC);
-		if (dist2Idx == 0)
-		{
-			iterative_BF(src, answer, r_BF, sigma_c, sigma_s, iterationBF, false);
-			imwrite("img/answer/bf/" + img_name + "_" + BF_PARAMETERS + ".png", answer);
-		}
-		else if (dist2Idx == 1)
-		{
-			cp::L0Smoothing(src, answer, l0lambda, l0kapper);
-			imwrite("img/answer/ll/" + img_name + "_" + LL_PARAMETERS + ".png", answer);
-		}
-		else if (dist2Idx == 2)
-		{
-			LocalLaplacianFilter(src, answer, alpha_llf, beta_llf, sigma_r_llf);
-			imwrite("img/answer/ll/" + img_name + "_" + LL_PARAMETERS + ".png", answer);
-		}
-		else if (dist2Idx == 3)
-		{
-			cp::HazeRemove hr;
-			hr(src, answer, hz_r_dark, hz_rate, hz_r_joint, hz_e_joint);
-			imwrite("img/answer/ll/" + img_name + "_" + LL_PARAMETERS + ".png", answer);
-			//hr.removeFastGlobalSmootherFilter(src, answer, 1, 0.1, 20000, 215, 0.25, 3);
-			//hr.gui(src);
-		}
-		else if (dist2Idx == 4)
-		{
-			Mat mask = imread("img/kodim01_mask.png", 0);
-			//Mat mask = imread("img/kodim02_mask.png", 0);
-			xphoto::inpaint(src, mask, answer, 0);
-			imwrite("img/answer/ll/" + img_name + "_" + LL_PARAMETERS + ".png", answer);
-		}
-		else if (dist2Idx == 5)
-		{
-			stylization(src, answer);
-			imwrite("img/answer/ll/" + img_name + "_" + LL_PARAMETERS + ".png", answer);
-		}
+		processingData(src, answer, 1, dist2Idx, img_name);
 		//cp::guiAlphaBlend(answer, src);
-		processing_fulltime = t.getTime();
 	}
 }
 //int processingType = 1;//TRecipesRecompute
@@ -241,120 +290,52 @@ void loadTRecipesAndProcessingDataHigh(Mat& src, Mat& answer, const int distIdx,
 #pragma endregion
 
 	answer.create(src.rows, src.cols, src.type());
-	double processing_fulltime = 0.0;
-	double processing_subtime = 0.0;
 	if (gtomit == true) //accelerate image processing for large size image
 	{
-		if (dist2Idx == 0)
-		{
-			answer = imread("img/answer/bf/" + img_name + "_" + BF_PARAMETERS + ".png");
-		}
-		else if (dist2Idx == 1)
-		{
-			answer = imread("img/answer/l0/" + img_name + "_" + L0_PARAMETERS + ".png");
-		}
-		else if (dist2Idx == 2)
-		{
-			answer = imread("img/answer/ll/" + img_name + "_" + LL_PARAMETERS + ".png");
-		}
-		else if (dist2Idx == 3)
-		{
-			answer = imread("img/answer/hr/" + img_name + "_" + HR_PARAMETERS + ".png");
-		}
-		else if (dist2Idx == 4)
-		{
-			answer = imread("img/answer/ip/" + img_name + ".png");
-		}
-		else if (dist2Idx == 5)
-		{
-			answer = imread("img/answer/st/" + img_name + ".png");
-		}
+		answer = loadData(dist2Idx, img_name);
 	}
 	else //compute
 	{
 		cp::Timer t("compute GT", cp::TIME_MSEC);
-		if (dist2Idx == 0)
-		{
-			iterative_BF(src, answer, r_BF, sigma_c, sigma_s, iterationBF, false);
-			imwrite("img/answer/bf/" + img_name + "_" + BF_PARAMETERS + ".png", answer);
-		}
-		else if (dist2Idx == 1)
-		{
-			cp::L0Smoothing(src, answer, l0lambda, l0kapper);
-			imwrite("img/answer/ll/" + img_name + "_" + LL_PARAMETERS + ".png", answer);
-		}
-		else if (dist2Idx == 2)
-		{
-			LocalLaplacianFilter(src, answer, alpha_llf, beta_llf, sigma_r_llf);
-			imwrite("img/answer/ll/" + img_name + "_" + LL_PARAMETERS + ".png", answer);
-		}
-		else if (dist2Idx == 3)
-		{
-			cp::HazeRemove hr;
-			hr(src, answer, hz_r_dark, hz_rate, hz_r_joint, hz_e_joint);
-			imwrite("img/answer/ll/" + img_name + "_" + LL_PARAMETERS + ".png", answer);
-			//hr.removeFastGlobalSmootherFilter(src, answer, 1, 0.1, 20000, 215, 0.25, 3);
-			//hr.gui(src);
-		}
-		else if (dist2Idx == 4)
-		{
-			Mat mask = imread("img/kodim01_mask.png", 0);
-			//Mat mask = imread("img/kodim02_mask.png", 0);
-			xphoto::inpaint(src, mask, answer, 0);
-			imwrite("img/answer/ll/" + img_name + "_" + LL_PARAMETERS + ".png", answer);
-		}
-		else if (dist2Idx == 5)
-		{
-			cv::stylization(src, answer);
-			imwrite("img/answer/ll/" + img_name + "_" + LL_PARAMETERS + ".png", answer);
-		}
+		processingData(src, answer, 1, dist2Idx, img_name);
 		//cp::guiAlphaBlend(answer, src);
-		processing_fulltime = t.getTime();
 	}
 }
-void processingDataLow(Mat& srclow, Mat& dstlow, const int upsample_size, const int dist2Idx)
+
+//constexpr int processingType = 2;//MTASubjective
+void loadMTASubjective(Mat& src, Mat& answer, const int dist2Idx, const int imageIdx, int color, Size size = Size(1024, 1024))
 {
-	//image processing in downsampled domain
-	const double sub_rate = 1.0 / upsample_size;
-#pragma region ip_in_ds
-	if (dist2Idx == 0)
+	string dir_original = "./img/MTA_subjective_assessment/original/";
+	string dir_answer = "./img/MTA_subjective_assessment/processed_source/";
+
+	string dist = "";
+	const int didx = dist2Idx % 4;
+	switch (didx)
 	{
-		const int r = (int)ceil(3.0 * sigma_s * sub_rate);
-		iterative_BF(srclow, dstlow, r, sigma_c, sigma_s * sub_rate, iterationBF, false);
-		//iterative_BF_32F(srclow, low, r_BF * sub_rate, sigma_c, sigma_s * sub_rate, iterationBF, false);
+	case 0: dist = "bf"; break;
+	case 1: dist = "l0"; break;
+	case 2: dist = "ll"; break;
+	case 3: dist = "hz"; break;
+	default: break;
 	}
-	else if (dist2Idx == 1)
+
+	const int iidx = imageIdx % 5;
+	src = imread(dir_original + cv::format("img%02d.png", (didx == 3 && iidx > 1) ? iidx + 10 : iidx));
+
+	string img = cv::format("img%02d", iidx);
+	string mes = dist + "_cpy_" + img + "_res01.png";
+	answer = imread(dir_answer + mes);
+
+	if (color == 0)
 	{
-		cp::L0Smoothing(srclow, dstlow, l0lambda, l0kapper);
+		cvtColor(src, src, COLOR_GRAY2BGR);
+		cvtColor(answer, answer, COLOR_GRAY2BGR);
 	}
-	else if (dist2Idx == 2)
-	{
-		//LocalLaplacianFilter(srclow, dstlow, alpha_llf, beta_llf, sigma_r_llf + px * 0.0001);
-		LocalLaplacianFilter(srclow, dstlow, alpha_llf, beta_llf, sigma_r_llf);
-	}
-	else if (dist2Idx == 3)
-	{
-		cp::HazeRemove hr;
-		const int r = int(hz_r_joint * sub_rate);
-		const int dr = int(hz_r_dark * sub_rate);
-		hr(srclow, dstlow, dr, hz_rate, r, hz_e_joint);
-		//hr.removeFastGlobalSmootherFilter(srclow, low, 1, 0.1, 20000, 215, 0.25, 3);
-	}
-	else if (dist2Idx == 4)
-	{
-		Mat mask_ = imread("img/kodim01_mask.png", 0);
-		//Mat mask_ = imread("img/kodim02_mask.png", 0);
-		Mat mask;
-		resize(mask_, mask, srclow.size(), 0, 0, INTER_NEAREST);
-		xphoto::inpaint(srclow, mask, dstlow, 0);
-	}
-	else if (dist2Idx == 5)
-	{
-		stylization(srclow, dstlow);
-	}
-#pragma endregion
+	resize(src, src, size);
+	resize(answer, answer, size);
 }
-//int processingType = 2;//TRecipesMTARecompute
+
+//int processingType = 3;//TRecipesMTARecompute
 void loadTRecipesMTARecompute(Mat& src, Mat& answer, const int distIdx, const int dist2Idx, const int imageIdx, const int color, Size size = Size(1024, 1024))
 {
 	const string dist = getProcessingTRecipesName(distIdx) + "_";
@@ -374,57 +355,7 @@ void loadTRecipesMTARecompute(Mat& src, Mat& answer, const int distIdx, const in
 	resize(src, src, size);
 	resize(answer, answer, size);
 }
-//constexpr int processingType = 3;//MTASubjective
-void loadMTASubjective(Mat& src, Mat& answer, const int distIdx, const int imageIdx, int color, Size size = Size(1024, 1024))
-{
-	string dist = "";
-	const int didx = distIdx % 4;
-	switch (didx)
-	{
-	case 0: dist = "bf/"; break;//20
-	case 1: dist = "l0/"; break;//20
-	case 2: dist = "ll/"; break;//12
-	case 3: dist = "hz/"; break;//20
-	default: break;
-	}
 
-	string file = "";
-	const int iidx = imageIdx % 5;
-	if (didx == 3)
-	{
-		switch (iidx)
-		{
-		case 0: file = "leaf.png"; break;
-		case 1: file = "nature.png"; break;
-		case 2: file = "haze1.png"; break;
-		case 3: file = "haze3.png"; break;
-		case 4: file = "haze4.png"; break;
-		default: break;
-		}
-	}
-	else
-	{
-		switch (iidx)
-		{
-		case 0: file = "leaf.png"; break;
-		case 1: file = "nature.png"; break;
-		case 2: file = "building.png"; break;
-		case 3: file = "mosaic.png"; break;
-		case 4: file = "baby.png"; break;
-		default: break;
-		}
-	}
-
-	src = imread("img/subjective/src/" + file, color);
-	answer = imread("img/subjective/" + dist + file, color);
-	if (color == 0)
-	{
-		cvtColor(src, src, COLOR_GRAY2BGR);
-		cvtColor(answer, answer, COLOR_GRAY2BGR);
-	}
-	resize(src, src, size);
-	resize(answer, answer, size);
-}
 //constexpr int processingType = 4;//TRecipesDirect
 void loadTRecipesDirect(Mat& src, Mat& answer, const int distIdx, const int imageIdx, int color, Size size = Size(1024, 1024))
 {
@@ -443,11 +374,6 @@ void loadTRecipesDirect(Mat& src, Mat& answer, const int distIdx, const int imag
 void testGUI()
 {
 	//parameters
-	//int upsample_size = 2;// Subsampling rate
-	int upsample_size = 4;// Subsampling rate
-	//int upsample_size = 8;// Subsampling rate
-	//int upsample_size = 16;// Subsampling rate
-
 	string wname = "uptest";
 	namedWindow(wname);
 	moveWindow(wname, 50, 50);
@@ -459,7 +385,7 @@ void testGUI()
 	int index = 8; createTrackbar("showIndex", "", &index, 14);
 	int alpha = 0; createTrackbar("showAlpha", "", &alpha, 100);
 	int metrics = 0; createTrackbar("metrics", "", &metrics, 2);
-	int res = 1; createTrackbar("res", "", &res, 5); setTrackbarMin("res", "", 1);
+	int res = 1; createTrackbar("upresolution", "", &res, 5); setTrackbarMin("res", "", 1);
 
 	int iteration = 1; createTrackbar("iteration", "", &iteration, 100);
 
@@ -524,6 +450,7 @@ void testGUI()
 	LocalLUTUpsample locallut;
 
 	int key = 0;
+	int upsample_size = 0;
 	while (key != 'q')
 	{
 		totalTime.start();
@@ -540,12 +467,12 @@ void testGUI()
 				if (processingType == 0) loadHRHPAndProcessingDataHigh(srchigh, answer, distRecompIndex, imageIdx, color);
 				if (processingType == 1) loadTRecipesAndProcessingDataHigh(srchigh, answer, distRecipeIndex, distRecompIndex, imageIdx, color);
 				cp::downsample(srchigh, srclow, upsample_size, cp::Downsample(inter_d), parameter, p * 0.1);
-				processingDataLow(srclow, dstlow, upsample_size, distRecompIndex);
+				processingData(srclow, dstlow, upsample_size, distRecompIndex, "");
 			}
 			else
 			{
-				if (processingType == 2) loadTRecipesMTARecompute(srchigh, answer, distRecipeIndex, distRecompIndex, imageIdx, color);
-				if (processingType == 3) loadMTASubjective(srchigh, answer, distRecompIndex, imageIdx, color);
+				if (processingType == 2) loadMTASubjective(srchigh, answer, distRecompIndex, imageIdx, color);
+				if (processingType == 3) loadTRecipesMTARecompute(srchigh, answer, distRecipeIndex, distRecompIndex, imageIdx, color);
 				if (processingType == 4) loadTRecipesDirect(srchigh, answer, distRecipeIndex, imageIdx, color);
 				cp::downsample(srchigh, srclow, upsample_size, cp::Downsample(inter_d), parameter, p * 0.1);
 				cp::downsample(answer, dstlow, upsample_size, cp::Downsample(inter_d), parameter, p * 0.1);
